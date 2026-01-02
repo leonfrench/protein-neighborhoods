@@ -99,7 +99,7 @@ function fetchRepositoryInformation() {
 fetchRepositoryInformation();
 
 function getOauthLink() {
-  let isDev = window.location.hostname !== 'anvaka.github.io';
+  let isDev = window.location.hostname !== 'leonfrench.github.io';
   const clientId = isDev ? '244bf05034e7cf9158cc' : '5f5bbe0c2623f5a7e738';
   let authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}`;
   if (isDev) {
