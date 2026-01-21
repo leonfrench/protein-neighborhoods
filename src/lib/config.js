@@ -14,4 +14,5 @@ export default {
 
   namesEndpoint: `${server}${version}/names`,
   graphsEndpoint: `${server}${version}/graphs`,
+  showRepoInfo: false,
 };

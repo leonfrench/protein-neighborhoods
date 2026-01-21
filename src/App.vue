@@ -9,10 +9,12 @@ import LargestRepositories from './components/LargestRepositories.vue';
 import FocusRepository from './components/FocusRepository.vue';
 import GroupViewModel from './lib/GroupViewModel';
 import FocusViewModel from './lib/FocusViewModel';
+import config from './lib/config';
 
 import bus from './lib/bus'
 
 const SM_SCREEN_BREAKPOINT = 600;
+const showRepoInfo = config.showRepoInfo !== false;
 
 const sidebarVisible = ref(false);
 const currentProject = ref(''); 
@@ -62,6 +64,11 @@ function findProject(x) {
 
 function onRepoSelected(repo) {
   lastSelected = repo;
+  if (!showRepoInfo) {
+    smallPreviewName.value = '';
+    currentProject.value = repo.text;
+    return;
+  }
   if (isSmallScreen.value) {
     // move panel to the bottom
     smallPreviewName.value = repo.text;
@@ -72,6 +79,7 @@ function onRepoSelected(repo) {
 }
 
 function showFullPreview() {
+  if (!showRepoInfo) return;
   smallPreviewName.value = null;
   currentProject.value = lastSelected.text;
 }
@@ -205,7 +213,7 @@ async function listCurrentConnections() {
       @selected="findProject"
       @close="closeFocusView()"
     ></focus-repository>
-    <github-repository :name="currentProject" v-if="currentProject" @listConnections="listCurrentConnections()"></github-repository>
+    <github-repository :name="currentProject" v-if="currentProject && showRepoInfo" @listConnections="listCurrentConnections()"></github-repository>
     <form @submit.prevent="onSubmit" class="search-box" v-if="typeAheadVisible">
       <type-ahead
         placeholder="Find Project"
@@ -219,7 +227,7 @@ async function listCurrentConnections() {
       ></type-ahead>
     </form>
     <transition name='slide-bottom'>
-      <small-preview v-if="smallPreviewName" :name="smallPreviewName" class="small-preview" @showFullPreview="showFullPreview()"></small-preview>
+      <small-preview v-if="smallPreviewName && showRepoInfo" :name="smallPreviewName" class="small-preview" @showFullPreview="showFullPreview()"></small-preview>
     </transition>
     <div class="tooltip" v-if="tooltip" :style="{left: tooltip.left, top: tooltip.top, background: tooltip.background}">{{ tooltip.text }}</div>
     <div class="context-menu" v-if="contextMenu" :style="{left: contextMenu.left, top: contextMenu.top}">
