@@ -308,8 +308,9 @@ function getDefaultStyle() {
         "points-source": {
           type: "vector",
           tiles: [config.vectorTilesTiles],
-          minzoom: 0,
-          maxzoom: 7,
+          //was minzoom 4 which would hide some points/proteins at high zoom levels
+          minzoom: 3,
+          maxzoom: 5,
           center: [-9.843750,4.213679,7],
         },
         "place": { // this one loaded asynchronously, and merged with local storage data
@@ -394,7 +395,7 @@ function getDefaultStyle() {
           "type": "symbol",
           "source": "points-source",
           "source-layer": "points",
-          "filter": [">=", ["zoom"], 2],
+          "filter": [">=", ["zoom"], 3],
           "layout": {
             "text-font": [ "Roboto Condensed Regular" ],
             "text-field": ["slice", ["get", "label"], ["+", ["index-of", "/", ["get", "label"]], 1]],
