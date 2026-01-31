@@ -1,6 +1,6 @@
 # Protein Neighborhoods
 
-**[Protein Neighborhoods]**(https://leonfrench.github.io/protein-neighborhoods/) is an interactive map of the human autosomal proteome, inspired by the Map of GitHub by [Andrei Kashcha (@anvaka)](https://github.com/anvaka). Each dot represents a protein. Proteins are positioned close together when they have similar **single-cell expression profiles**, **RNA sequence**, and **protein sequence**.
+**[Protein Neighborhoods](https://leonfrench.github.io/protein-neighborhoods/)** is an interactive map of the human autosomal proteome, inspired by the Map of GitHub by [Andrei Kashcha (@anvaka)](https://github.com/anvaka). Each dot represents a protein. Proteins are positioned close together when they have similar **single-cell gene expression**, **RNA sequence**, and **protein sequence**.
 
 ## Map releases
 
