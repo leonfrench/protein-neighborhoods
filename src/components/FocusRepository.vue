@@ -90,7 +90,7 @@ function handleNodeSelected(node, event) {
       <div v-if="!vm.graphData" class="repo-list-container">
         <ul v-if="vm.repos && !vm.expandingGraph">
           <li v-for="repo in vm.repos" :key="repo.name">
-            <a :href="getLink(repo)" @click.prevent="showDetails(repo, $event)" target="_blank">{{repo.name}} <span v-if="repo.isExternal" title="External country">E</span>
+            <a :href="getLink(repo)" @click.prevent="showDetails(repo, $event)" target="_blank">{{repo.name}} <span v-if="repo.isExternal" title="External country">(external cluster)</span>
             </a>
           </li>
         </ul>      <div v-if="vm.expandingGraph" class="loading">

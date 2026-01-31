@@ -7,5 +7,5 @@ git init
 git add .
 git commit -m 'push to gh-pages'
 ## Change the line below to deploy to your gh-pages
-git push --force git@github.com:leonfrench/map-of-proteins.git main:gh-pages
+git push --force git@github.com:leonfrench/protein-neighborhoods.git main:gh-pages
 cd ../

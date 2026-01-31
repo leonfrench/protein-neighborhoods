@@ -27,56 +27,28 @@ onBeforeUnmount(() => {
 <template>
   <div>
     <div class='row'>
-      <h2>Map of GitHub</h2>
+      <h2>Protein Neighborhoods</h2>
       <!-- Icon copyright (c) 2013-2017 Cole Bemis: https://github.com/feathericons/feather/blob/master/LICENSE -->
         <a href='#' @click.prevent='close' class='close-btn'>
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-x-circle"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
         </a>
     </div>
-    <div class="container">
-      <p>
-        <img src="../../public/apple-touch-icon.png" alt="GitHub Map" class="map-image">
-        Each dot is a GitHub project. Two dots within the same cluster are 
-        usually close to each other if multiple users frequently gave stars to
-        both projects. The size of the dot indicates the number of stars the
-        project has received.
-      </p>
-      <p>
-        The map has approximately <b>690,000</b> projects, clustered into <b>1,500</b> countries. The map is build
-        based on 500 million stars given to GitHub projects between 2011 and end of April, 2025.
-      </p>
-      <h2>Map Versions</h2>
-      <p>
-        If you are looking for a different version of this map you can find it here:
-        <ul>
-          <li>
-            <a href="?" class="normal">Current release (2025)</a>
-          </li>
-          <li>
-            <a href="?v=v1" class="normal">First release (2023)</a>
-          </li>
-        </ul>
-      </p>
-      <h2>Credits</h2>
-      <p>
-        The cute logo of the project was created by my 9-years-old daughter <b>Louise Kashcha</b>,
-        who is an amazing artist and the biggest fan of cats I ever known. Thank you so much, Louise ❤️!
-      </p>
-      <h2>Support</h2>
-      <p>
-        If you love this project, please consider supporting it on <a href="https://github.com/sponsors/anvaka" class='normal'>GitHub</a> or
-        <a href="https://www.paypal.com/paypalme/anvakos/5" class='normal'>PayPal</a>.
-        Follow me on <a href="https://twitter.com/anvaka" class='normal'>Twitter</a> for updates. The source code is <a href="https://github.com/anvaka/map-of-github" class='normal'>here</a>.
-      </p>
-      <p>
-        Gratefully yours, <br>
-        <b>anvaka</b>
-      </p>
-    </div>
+<div class="container">
+  <p>
+    The map contains <b>17,890</b> proteins organized into <b>458</b> neighborhood clusters.
+  </p>
 
-    <div v-if="currentUser" class="user-info">
-      You are logged in as <b>{{currentUser.login}}</b> (<a href='#' @click.prevent="signOut" class="normal">log out</a>)
-    </div>
+<p>
+  This data-driven map is built by combining embeddings from
+  <a href="https://pubmed.ncbi.nlm.nih.gov/34232869/" target="_blank" rel="noopener noreferrer">ProtT5 by Elnaggar et al.</a>,
+  <a href="https://www.nature.com/articles/s41592-024-02201-0" target="_blank" rel="noopener noreferrer">scGPT by Cui et al.</a>,
+  and
+  <a href="https://philechka.com/science/orthrus" target="_blank" rel="noopener noreferrer">Orthrus by Fradkin et al.</a>
+  Together, these models have seen roughly 2 billion protein sequences, gene expression profiles from ~30 million cells, and compared RNA transcripts spanning hundreds of species.
+  The 100 shared dimensions identified by Canonical Correlation Analysis (CCA) were reduced to two UMAP coordinates; proteins were then clustered into regions in this 2D space, and the resulting clusters were named with ChatGPT 5.2.
+</p>
+</div>
+
   </div>
 </template>
 

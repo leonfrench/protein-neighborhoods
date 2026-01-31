@@ -400,7 +400,7 @@ function getDefaultStyle() {
           "type": "symbol",
           "source": "points-source",
           "source-layer": "points",
-          "filter": [">=", ["zoom"], 3],
+          "filter": [">=", ["zoom"], 5],
           "layout": {
             "text-font": [ "Roboto Condensed Regular" ],
             "text-field": ["slice", ["get", "label"], ["+", ["index-of", "/", ["get", "label"]], 1]],

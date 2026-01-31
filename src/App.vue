@@ -28,15 +28,15 @@ const currentFocus = ref(null);
 const unsavedChangesVisible = ref(false);
 const hasUnsavedChanges = ref(false);
 const isSmallScreen = ref(window.innerWidth < SM_SCREEN_BREAKPOINT);
-const supportMessageVisible = ref(false);
 let lastSelected;
-let supportMessageTimer;
 const geneMetadata = ref(null);
 const geneMetadataError = ref('');
 const geneMetadataLoading = ref(false);
 const currentClusterId = ref(null);
 const currentClusterName = ref('');
+const currentClusterEnrichedGo = ref('');
 let clusterInfoRequestId = 0;
+const SEARCH_FOCUS_ZOOM = 8;
 
 function onTypeAheadInput() {
 }
@@ -49,6 +49,7 @@ function closeSideBarViewer() {
   smallPreviewName.value = '';
   currentClusterId.value = null;
   currentClusterName.value = '';
+  currentClusterEnrichedGo.value = '';
   window.mapOwner?.clearHighlights();
 }
 
@@ -64,7 +65,7 @@ function findProject(x) {
   }
   const location = {
     center: [x.lat, x.lon],
-    zoom: 12,
+    zoom: SEARCH_FOCUS_ZOOM,
   }
   window.mapOwner?.makeVisible(x.text, location, x.skipAnimation);
   currentProject.value = x.text;
@@ -112,7 +113,6 @@ onBeforeUnmount(() => {
   bus.off('focus-on-repo', onFocusOnRepo);
   bus.off('unsaved-changes-detected', onUnsavedChangesDetected);
   window.removeEventListener('resize', onResize);
-  if (supportMessageTimer) clearTimeout(supportMessageTimer);
 })
 
 onBeforeMount(() => {
@@ -127,10 +127,6 @@ onBeforeMount(() => {
     loadGeneMetadata();
   }
   
-  // Show support message after a delay
-  supportMessageTimer = setTimeout(() => {
-    supportMessageVisible.value = true;
-  }, 10000); // Show after 10 seconds
 });
 
 function onResize() {
@@ -206,6 +202,7 @@ async function updateClusterInfo(repo) {
   const requestId = ++clusterInfoRequestId;
   currentClusterId.value = null;
   currentClusterName.value = '';
+  currentClusterEnrichedGo.value = '';
 
   let groupId = repo.groupId;
   if (groupId === undefined && repo.lat !== undefined && repo.lon !== undefined) {
@@ -221,6 +218,9 @@ async function updateClusterInfo(repo) {
   const match = places.features.find((feature) => String(feature?.properties?.ownerId) === groupIdKey);
   if (match?.properties?.name) {
     currentClusterName.value = match.properties.name;
+  }
+  if (match?.properties?.enriched_GO) {
+    currentClusterEnrichedGo.value = match.properties.enriched_GO;
   }
 }
 
@@ -248,15 +248,15 @@ async function listCurrentConnections() {
       You have unsaved labels in local storage. <a href="#" @click.prevent="showUnsavedChanges()" class="normal">Click here</a> to see them.
     </div>
     <div class="made-by">
-      Made by
-      <a class="normal" aria-label="Made by @anvaka" target="_blank" href="https://github.com/sponsors/anvaka">
+      Map:
+      <a class="normal" aria-label="Map by @leonfrench" target="_blank" href="https://github.com/leonfrench">
+        @leonfrench
+      </a>
+      • Based on
+      <a class="normal" aria-label="Based on @anvaka's web app" target="_blank" href="https://github.com/sponsors/anvaka">
         @anvaka
       </a>
-    </div>
-    <div class="top-right-support" v-if="supportMessageVisible && !aboutVisible && !smallPreviewName && !currentGroup && !currentFocus">
-      <span class="close-support" @click="supportMessageVisible = false">×</span>
-      Enjoying this map? <br>
-      <a href='https://www.paypal.com/paypalme/anvakos/5' target="_blank">Support the author</a>
+      's web app
     </div>
     <largest-repositories :repos="currentGroup" v-if="currentGroup"
       class="right-panel"
@@ -277,11 +277,12 @@ async function listCurrentConnections() {
       :error="geneMetadataError"
       :cluster-id="currentClusterId"
       :cluster-name="currentClusterName"
+      :cluster-enriched-go="currentClusterEnrichedGo"
       @listConnections="listCurrentConnections()"
     ></gene-repository>
     <form @submit.prevent="onSubmit" class="search-box" v-if="typeAheadVisible">
       <type-ahead
-        placeholder="Find Project"
+        placeholder="Find Protein"
         @menuClicked='aboutVisible = true'
         @selected='findProject'
         @beforeClear='closeSideBarOnSmallScreen'
@@ -321,57 +322,6 @@ async function listCurrentConnections() {
   color: hsla(160, 100%, 37%, 1);
 }
 
-.top-right-support {
-  opacity: 0.2;
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  background: var(--color-background-soft);
-  color: var(--color-text);
-  padding: 8px 16px;
-  font-size: 14px;
-  z-index: 10;
-  max-width: 200px;
-  text-align: center;
-  animation: fadeLittleIn 0.5s ease;
-  border: 1px solid var(--color-border);
-}
-
-.top-right-support:hover {
-  opacity: 1;
-}
-
-.close-support {
-  position: absolute;
-  top: -6px;
-  left: -8px;
-  cursor: pointer;
-  opacity: 1;
-  font-size: 12px;
-  border-radius: 8px;
-  line-height: 6px;
-  padding: 4px;
-  background: var(--color-background-soft);
-  border: 1px solid var(--color-border);
-}
-
-.close-support:hover {
-  opacity: 1;
-}
-
-.top-right-support a {
-  color: var(--color-link-hover);
-  text-decoration: none;
-}
-
-.top-right-support a:hover {
-  text-decoration: underline;
-}
-
-@keyframes fadeLittleIn {
-  from { opacity: 0; }
-  to { opacity: 0.2; }
-}
 
 @keyframes fadeIn {
   from { opacity: 0; }

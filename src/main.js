@@ -65,7 +65,7 @@ function showErrorMessage(e) {
   document.body.innerHTML = `<div class='no-webgl'>
     <h4>Something went wrong :(</h4>
     <p>
-      Please try to reload the page. If the problem persists, please <a href='https://github.com/anvaka/map-of-github/issues' class='critical'>let me know</a>.
+      Please try to reload the page. 
     </p>
     <p>
     The error message was: <pre class="error"></pre>

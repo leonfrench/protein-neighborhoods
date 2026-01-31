@@ -14,6 +14,10 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  clusterEnrichedGo: {
+    type: String,
+    default: ''
+  },
   metadata: {
     type: Object,
     default: null
@@ -61,6 +65,10 @@ const displayClusterId = computed(() => {
   return props.clusterId;
 });
 
+const displayClusterEnrichedGo = computed(() => {
+  return props.clusterEnrichedGo || 'Unknown';
+});
+
 function listConnections() {
   emit('listConnections');
 }
@@ -74,9 +82,10 @@ function listConnections() {
         {{ geneEntry.name }}
       </div>
       <div class="cluster-info">
-        <div class="cluster-label">Cluster</div>
-        <div class="cluster-name">{{ displayClusterName }}</div>
-        <div class="cluster-id">ID: {{ displayClusterId }}</div>
+        <div class="cluster-line">
+          Cluster: {{ displayClusterName }} (ID: {{ displayClusterId }})
+        </div>
+        <div class="cluster-enriched-go">Enriched GO: {{ displayClusterEnrichedGo }}</div>
       </div>
       <div v-if="loading" class="loading">
         Loading gene metadata...
@@ -124,19 +133,11 @@ h2 {
   margin-bottom: 16px;
 }
 
-.cluster-label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  opacity: 0.8;
-  margin-bottom: 4px;
-}
-
-.cluster-name {
+.cluster-line {
   line-height: 1.2em;
 }
 
-.cluster-id {
+.cluster-enriched-go {
   font-size: 12px;
   opacity: 0.8;
 }
