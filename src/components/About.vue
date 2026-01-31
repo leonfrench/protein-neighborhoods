@@ -47,6 +47,13 @@ onBeforeUnmount(() => {
   Together, these models have seen roughly 2 billion protein sequences, gene expression profiles from ~30 million cells, and compared RNA transcripts spanning hundreds of species.
   The 100 shared dimensions identified by Canonical Correlation Analysis (CCA) were reduced to two UMAP coordinates; proteins were then clustered into regions in this 2D space, and the resulting clusters were named with ChatGPT 5.2.
 </p>
+
+<p>
+  The source code is on <a href="https://github.com/leonfrench/protein-neighborhoods" class='normal'>Github</a>.
+  Inspired by, and originally forked from,
+  <a href="https://github.com/anvaka/map-of-github" target="_blank" class="normal">Map of GitHub</a> by @anvaka.
+</p>
+
 </div>
 
   </div>

@@ -6,7 +6,7 @@ let mapLoader = document.querySelector('.map-loading');
 if (!webglSupported()) {
   document.body.innerHTML = `<div class='no-webgl'>
     <h4>WebGL is not enabled :(</h4>
-    <p>This website needs <a href='https://en.wikipedia.org/wiki/WebGL' class='critical'>WebGL</a> to render a map of GitHub.
+    <p>This website needs <a href='https://en.wikipedia.org/wiki/WebGL' class='critical'>WebGL</a> to render the map.
     </p> <p>
     You can try another browser. If the problem persists - very likely your video card isn't supported.
     </p>
@@ -77,5 +77,5 @@ function showErrorMessage(e) {
 // Print friendly message to the viewer:
 console.log(`%c 👋 Hello there!`, 'font-size: 24px; font-weight: bold;');
 console.log('Thank you for checking out source code. You can read it here: ')
-console.log('https://github.com/anvaka/map-of-github');
+console.log('https://github.com/leonfrench/protein-neighborhoods');
 console.log('If you have any questions, please let me know');
