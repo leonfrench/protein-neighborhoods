@@ -47,8 +47,6 @@ export default function createMap() {
       top: e.point.y + "px" 
     };
 
-    contextMenuItems.items.push(showLargestProjectsContextMenuItem(bg));
-
     const nearestCity = findNearestCity(e.point);
     if (nearestCity) {
       let name = nearestCity.properties.label;
@@ -104,7 +102,6 @@ export default function createMap() {
     },
     makeVisible,
     clearHighlights,
-    clearBorderHighlights,
     getPlacesGeoJSON,
     getGroupIdAt
   }
@@ -139,41 +136,8 @@ export default function createMap() {
     });
   }
 
-  function showLargestProjectsContextMenuItem(bg) {
-    return {
-        text: "Show largest projects",
-        click: () => {
-          let seen = new Map();
-          let largeRepositories = map.querySourceFeatures("points-source", {
-              sourceLayer: "points",
-              filter: ["==", "parent", bg.id]
-          }).sort((a, b) => {
-            return b.properties.size - a.properties.size;
-          });
-          for (let repo of largeRepositories) {
-            let v = {
-              name: repo.properties.label,
-              lngLat: repo.geometry.coordinates,
-            }
-            if (seen.has(repo.properties.label)) continue;
-            seen.set(repo.properties.label, v);
-            if (seen.size >= 100) break;
-          }
-          
-          map.setFilter("border-highlight", ["==", ["id"], bg.id]);
-          map.setLayoutProperty("border-highlight", "visibility", "visible");
-          // todo: fire a view model here instead of the list.
-          bus.fire("show-largest-in-group", bg.id, Array.from(seen.values()));
-        }
-    }
-  }
-
   function getPlacesGeoJSON() {
     return labelEditor.getPlaces();
-  }
-
-  function clearBorderHighlights() {
-    map.setLayoutProperty("border-highlight", "visibility", "none");
   }
 
   function clearHighlights() {

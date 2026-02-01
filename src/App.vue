@@ -6,9 +6,7 @@ import GeneRepository from './components/GeneRepository.vue';
 import SmallPreview from './components/SmallPreview.vue';
 import About from './components/About.vue';
 import UnsavedChanges from './components/UnsavedChanges.vue';
-import LargestRepositories from './components/LargestRepositories.vue';
 import FocusRepository from './components/FocusRepository.vue';
-import GroupViewModel from './lib/GroupViewModel';
 import FocusViewModel from './lib/FocusViewModel';
 import config from './lib/config';
 
@@ -23,7 +21,6 @@ const smallPreviewName = ref('');
 const tooltip = ref(null);
 const contextMenu = ref(null);
 const aboutVisible = ref(false);
-const currentGroup = ref(null);
 const currentFocus = ref(null);
 const unsavedChangesVisible = ref(false);
 const hasUnsavedChanges = ref(false);
@@ -40,8 +37,6 @@ const SEARCH_FOCUS_ZOOM = 8;
 
 function onTypeAheadInput() {
 }
-
-const groupCache = new Map();
 
 function closeSideBarViewer() {
   sidebarVisible.value = false;
@@ -109,7 +104,6 @@ onBeforeUnmount(() => {
   bus.off('repo-selected', onRepoSelected);
   bus.off('show-tooltip', onShowTooltip);
   bus.off('show-context-menu', onShowContextMenu);
-  bus.off('show-largest-in-group', onShowLargestInGroup);
   bus.off('focus-on-repo', onFocusOnRepo);
   bus.off('unsaved-changes-detected', onUnsavedChangesDetected);
   window.removeEventListener('resize', onResize);
@@ -119,7 +113,6 @@ onBeforeMount(() => {
   bus.on('repo-selected', onRepoSelected);
   bus.on('show-context-menu', onShowContextMenu);
   bus.on('show-tooltip', onShowTooltip);
-  bus.on('show-largest-in-group', onShowLargestInGroup);
   bus.on('focus-on-repo', onFocusOnRepo);
   bus.on('unsaved-changes-detected', onUnsavedChangesDetected);
   window.addEventListener('resize', onResize);
@@ -140,28 +133,11 @@ function doContextMenuAction(menuItem) {
 
 function onFocusOnRepo(repo, groupId) {
   const focusViewModel = new FocusViewModel(repo, groupId);
-  currentGroup.value = null;
   currentFocus.value = focusViewModel;
-}
-
-function onShowLargestInGroup(groupId, largest) {
-  let groupViewModel = groupCache.get(groupId);
-  if (!groupViewModel) {
-    groupViewModel = new GroupViewModel(groupId);
-    groupCache.set(groupId, groupViewModel);
-  }
-  groupViewModel.setLargest(largest);
-  currentFocus.value = null;
-  currentGroup.value = groupViewModel;
 }
 
 function onUnsavedChangesDetected(hasChanges) {
   hasUnsavedChanges.value = hasChanges;
-}
-
-function closeLargestRepositories() {
-  currentGroup.value = null
-  window.mapOwner?.clearBorderHighlights();
 }
 
 function closeFocusView() {
@@ -172,7 +148,7 @@ function closeFocusView() {
 }
 
 const typeAheadVisible = computed(() => {
-  return !(isSmallScreen.value && currentGroup.value && !currentProject.value);
+  return true;
 });
 
 function showUnsavedChanges() {
@@ -235,7 +211,6 @@ async function listCurrentConnections() {
   const groupId = lastSelected.groupId ?? (await window.mapOwner?.getGroupIdAt(lastSelected.lat, lastSelected.lon));
   if (groupId !== undefined) {
     const focusViewModel = new FocusViewModel(lastSelected.text, groupId);
-    // currentGroup.value = null;
     currentFocus.value = focusViewModel;
   }
 }
@@ -258,11 +233,6 @@ async function listCurrentConnections() {
       </a>
       's web app
     </div>
-    <largest-repositories :repos="currentGroup" v-if="currentGroup"
-      class="right-panel"
-      @selected="findProject"
-      @close="closeLargestRepositories()"
-    ></largest-repositories>
     <focus-repository :vm="currentFocus" v-if="currentFocus"
       class="right-panel"
       @selected="findProject"

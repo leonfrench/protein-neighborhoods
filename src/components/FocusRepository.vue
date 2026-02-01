@@ -157,14 +157,6 @@ ul {
   height: calc(100% - 60px);
 }
 
-.chat-container {
-  height: 100%;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--color-border)
-}
-
 .close-btn {
   margin: 8px;
 }
