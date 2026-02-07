@@ -11,6 +11,7 @@ import getColorTheme from "./getColorTheme";
 
 const primaryHighlightColor = "#bf2072";
 const secondaryHighlightColor = "#e56aaa";
+const fallbackPointSize = 5;
 
 const currentColorTheme = getColorTheme();
 
@@ -150,14 +151,19 @@ export default function createMap() {
   }
 
   function makeVisible(repository, location, disableAnimation = false) {
+    const drawEdgesAtCurrentCenter = () => {
+      const projectedPoint = map.project(location.center);
+      drawBackgroundEdges(projectedPoint, repository);
+    };
+
     if (disableAnimation) {
       map.jumpTo(location);
-    } else {
-      map.flyTo(location)
+      drawEdgesAtCurrentCenter();
+      return;
     }
-    map.once("moveend", () => {
-      drawBackgroundEdges(location.center, repository);
-    });
+
+    map.once("moveend", drawEdgesAtCurrentCenter);
+    map.flyTo(location);
   }
 
   function getBackgroundNearPoint(point) {
@@ -191,15 +197,31 @@ export default function createMap() {
         filter: ["==", "parent", groupId]
       }).forEach(repo => {
         const lngLat = repo.geometry.coordinates;
+        const size = Number(repo.properties.size);
         renderedNodesAdjustment.set(repo.properties.label, {
-          lngLat
+          lngLat,
+          size: Number.isFinite(size) && size > 0 ? size : fallbackPointSize
         });
       });
 
+      const getFallbackSize = (nodeId) => {
+        const graphNodeData = groupGraph.getNode(nodeId)?.data || {};
+        const size = Number(graphNodeData.size ?? graphNodeData.s);
+        return Number.isFinite(size) && size > 0 ? size : fallbackPointSize;
+      };
+
       groupGraph.forEachLink(link => {
         if (link.data?.e && ignoreExternal) return; // external;
-        const fromGeo = renderedNodesAdjustment.get(link.fromId)?.lngLat || groupGraph.getNode(link.fromId).data.l;
-        const toGeo = renderedNodesAdjustment.get(link.toId)?.lngLat || groupGraph.getNode(link.toId).data.l;
+        const fromNodeData = renderedNodesAdjustment.get(link.fromId) || {
+          lngLat: groupGraph.getNode(link.fromId).data.l,
+          size: getFallbackSize(link.fromId)
+        };
+        const toNodeData = renderedNodesAdjustment.get(link.toId) || {
+          lngLat: groupGraph.getNode(link.toId).data.l,
+          size: getFallbackSize(link.toId)
+        };
+        const fromGeo = fromNodeData.lngLat;
+        const toGeo = toNodeData.lngLat;
 
         const from = maplibregl.MercatorCoordinate.fromLngLat(fromGeo);
         const to = maplibregl.MercatorCoordinate.fromLngLat(toGeo);
@@ -215,18 +237,20 @@ export default function createMap() {
 
           if (!primaryNodePosition) {
             primaryNodePosition = repo === link.fromId ? fromGeo : toGeo;
+            const primaryNodeSize = repo === link.fromId ? fromNodeData.size : toNodeData.size;
             highlightedNodes.features.push({
               type: "Feature",
               geometry: {type: "Point", coordinates: primaryNodePosition},
-              properties: {color: primaryHighlightColor, name: repo, background: fillColor, textSize: 1.2}
+              properties: {color: primaryHighlightColor, name: repo, background: fillColor, textSize: 1.2, size: primaryNodeSize}
             });
           } 
           let otherName = repo === link.fromId ? link.toId : link.fromId;
+          const otherNodeSize = repo === link.fromId ? toNodeData.size : fromNodeData.size;
           // pick the other one too:
           highlightedNodes.features.push({
             type: "Feature",
             geometry: {type: "Point", coordinates: repo === link.fromId ? toGeo : fromGeo},
-            properties: {color: secondaryHighlightColor, name: otherName, background: fillColor, textSize: 0.8}
+            properties: {color: secondaryHighlightColor, name: otherName, background: fillColor, textSize: 0.8, size: otherNodeSize}
           });
         } else fastLinesLayer.addLine(line);
       });
@@ -393,6 +417,13 @@ function getDefaultStyle() {
           "source": "selected-nodes",
           "paint": {
             "circle-color": ["get", "color"],
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              5,  ["*", ["get", "size"], .1],
+              23, ["*", ["get", "size"], 1.5],
+            ]
           }
         },
         {

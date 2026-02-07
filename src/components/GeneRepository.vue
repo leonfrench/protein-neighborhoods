@@ -86,6 +86,9 @@ function listConnections() {
           Cluster: {{ displayClusterName }} (ID: {{ displayClusterId }})
         </div>
         <div class="cluster-enriched-go">Enriched GO: {{ displayClusterEnrichedGo }}</div>
+        <div class="actions row">
+          <a href="#" class="action-link" @click.prevent="listConnections()">List connections</a>
+        </div>
       </div>
       <div v-if="loading" class="loading">
         Loading gene metadata...
@@ -102,9 +105,6 @@ function listConnections() {
         <a v-if="uniprotLink" class="summary-link" :href="uniprotLink" target="_blank" rel="noopener">
           View on UniProt
         </a>
-      </div>
-      <div class="actions row">
-        <a href="#" @click.prevent="listConnections()">List connections</a>
       </div>
     </div>
   </div>
@@ -133,13 +133,38 @@ h2 {
   margin-bottom: 16px;
 }
 
-.cluster-line {
+.cluster-line,
+.cluster-enriched-go {
   line-height: 1.2em;
 }
 
-.cluster-enriched-go {
-  font-size: 12px;
-  opacity: 0.8;
+.actions {
+  margin-top: 8px;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: row;
+  justify-content: stretch;
+}
+
+.action-link {
+  align-items: center;
+  justify-content: center;
+  display: inline-flex;
+  min-height: 32px;
+  width: 100%;
+  padding: 4px 10px;
+  background: var(--color-background-soft);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--color-text);
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.action-link:hover {
+  border-color: var(--color-border-hover);
+  color: var(--color-link-hover);
 }
 
 .summary-title {
