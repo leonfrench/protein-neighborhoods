@@ -32,10 +32,159 @@ const geneMetadataLoading = ref(false);
 const currentClusterId = ref(null);
 const currentClusterName = ref('');
 const currentClusterEnrichedGo = ref('');
+const hasPersistentMultiHighlights = ref(false);
+const multiInputResetToken = ref(0);
 let clusterInfoRequestId = 0;
 const SEARCH_FOCUS_ZOOM = 8;
+const BULK_HIGHLIGHT_SIZE = 30;
+const MULTI_GENE_SPLITTER = /[,\s;]+/;
+const namesIndexCache = new Map();
 
 function onTypeAheadInput() {
+}
+
+function onSubmit() {
+}
+
+function normalizeGeneName(name = '') {
+  return name.trim().toLowerCase();
+}
+
+function getShortGeneName(name = '') {
+  const separatorIndex = name.lastIndexOf('/');
+  if (separatorIndex < 0) return name;
+  return name.slice(separatorIndex + 1);
+}
+
+function parseMultiGeneInput(rawInput = '') {
+  const uniqueGenes = [];
+  const seen = new Set();
+
+  rawInput.split(MULTI_GENE_SPLITTER).forEach((entry) => {
+    const trimmed = entry.trim();
+    if (!trimmed) return;
+    const normalized = normalizeGeneName(trimmed);
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    uniqueGenes.push(trimmed);
+  });
+
+  return uniqueGenes;
+}
+
+async function loadNamesBucket(bucketKey) {
+  if (namesIndexCache.has(bucketKey)) {
+    return namesIndexCache.get(bucketKey);
+  }
+
+  const promise = fetch(`${config.namesEndpoint}/${encodeURIComponent(bucketKey)}.json`)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to load names bucket "${bucketKey}": ${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    })
+    .then((rows) => (Array.isArray(rows) ? rows : []))
+    .catch((error) => {
+      console.error(error);
+      return [];
+    });
+
+  namesIndexCache.set(bucketKey, promise);
+  return promise;
+}
+
+async function findGenesInIndex(genes) {
+  const normalizedGenes = genes.map(normalizeGeneName).filter(Boolean);
+  if (!normalizedGenes.length) {
+    return { matches: [], missing: [] };
+  }
+
+  const genesToFind = new Set(normalizedGenes);
+  const foundGenes = new Set();
+  const matchedNodes = [];
+  const seenNodes = new Set();
+  const bucketKeys = [...new Set(normalizedGenes.map((gene) => gene[0]))];
+  const buckets = await Promise.all(bucketKeys.map(loadNamesBucket));
+
+  buckets.forEach((rows) => {
+    rows.forEach((row) => {
+      if (!Array.isArray(row) || row.length < 3) return;
+
+      const [name, lat, lon] = row;
+      const normalizedName = normalizeGeneName(name);
+      const shortName = getShortGeneName(normalizedName);
+      const fullMatch = genesToFind.has(normalizedName);
+      const shortMatch = genesToFind.has(shortName);
+      if (!fullMatch && !shortMatch) return;
+
+      if (fullMatch) foundGenes.add(normalizedName);
+      if (shortMatch) foundGenes.add(shortName);
+
+      const lngLat = [Number(lat), Number(lon)];
+      if (!Number.isFinite(lngLat[0]) || !Number.isFinite(lngLat[1])) return;
+
+      const uniqueId = `${name}:${lngLat[0]}:${lngLat[1]}`;
+      if (seenNodes.has(uniqueId)) return;
+      seenNodes.add(uniqueId);
+
+      matchedNodes.push({
+        text: name,
+        coordinates: lngLat,
+        size: BULK_HIGHLIGHT_SIZE
+      });
+    });
+  });
+
+  const missing = normalizedGenes.filter((gene) => !foundGenes.has(gene));
+  return { matches: matchedNodes, missing };
+}
+
+async function onMultiGenesSelected(rawInput) {
+  const genes = parseMultiGeneInput(rawInput);
+  if (!genes.length) {
+    clearPersistentMultiHighlights();
+    return;
+  }
+
+  const { matches } = await findGenesInIndex(genes);
+  if (!matches.length) {
+    clearPersistentMultiHighlights();
+    return;
+  }
+
+  hasPersistentMultiHighlights.value = true;
+  window.mapOwner?.highlightNodes(matches);
+}
+
+function onMultiGenesCleared() {
+  closeSideBarViewer();
+  clearPersistentMultiHighlights();
+}
+
+function clearPersistentMultiHighlights(resetInput = false) {
+  window.mapOwner?.clearPersistentHighlights?.();
+  hasPersistentMultiHighlights.value = false;
+  if (resetInput) {
+    multiInputResetToken.value += 1;
+  }
+}
+
+function onSearchBeforeClear(payload) {
+  if (currentProject.value) {
+    payload.shouldProceed = false;
+    closeSideBarViewer();
+    return;
+  }
+
+  if (hasPersistentMultiHighlights.value) {
+    payload.shouldProceed = false;
+    clearPersistentMultiHighlights(true);
+  }
+}
+
+function onSearchCleared() {
+  closeSideBarViewer();
 }
 
 function closeSideBarViewer() {
@@ -45,7 +194,7 @@ function closeSideBarViewer() {
   currentClusterId.value = null;
   currentClusterName.value = '';
   currentClusterEnrichedGo.value = '';
-  window.mapOwner?.clearHighlights();
+  window.mapOwner?.clearSelectionHighlights?.();
 }
 
 function closeSideBarOnSmallScreen() {
@@ -255,11 +404,14 @@ async function listCurrentConnections() {
         placeholder="Find Protein"
         @menuClicked='aboutVisible = true'
         @selected='findProject'
-        @beforeClear='closeSideBarOnSmallScreen'
-        @cleared='closeSideBarViewer'
+        @beforeClear='onSearchBeforeClear'
+        @cleared='onSearchCleared'
         @inputChanged='onTypeAheadInput'
-        :showClearButton="currentProject"
+        @multiSelected='onMultiGenesSelected'
+        @multiCleared='onMultiGenesCleared'
+        :showClearButton="Boolean(currentProject || hasPersistentMultiHighlights)"
         :query="currentProject"
+        :multiInputResetToken="multiInputResetToken"
       ></type-ahead>
     </form>
     <transition name='slide-bottom'>

@@ -12,7 +12,11 @@
       </svg>
     </a>
     <input ref='input' autofocus type='text' autocomplete='off' autocorrect='off' autocapitalize='off'
-      spellcheck='false' :value='currentQuery' :placeholder='placeholder' @input='handleInput' @keydown="cycleTheList">
+      spellcheck='false' :value='currentQuery' :placeholder='placeholder' :style='searchInputStyle' @input='handleInput' @keydown="cycleTheList">
+    <a href="#" class='multi-input-toggle' :class="{ 'with-clear': currentQuery || showClearButton }"
+      @click.prevent='toggleMultiInput' title='Bulk select genes' aria-label='Bulk select genes'>
+      &#9776;
+    </a>
     <a type='submit' class='search-submit' href='#' @click.prevent='clearSearch' v-if='currentQuery || showClearButton'>
       <!-- Icon copyright (c) 2013-2017 Cole Bemis: https://github.com/feathericons/feather/blob/master/LICENSE -->
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -39,6 +43,21 @@
         </div>
       </li>
     </ul>
+    <div v-if="showMultiInput" class="multi-input-popover">
+      <div class="multi-input-title">Paste genes/proteins</div>
+      <textarea
+        ref="multiInput"
+        class="multi-input-textarea"
+        v-model="multiInputText"
+        placeholder="Separate names by spaces, commas, semicolons, or line breaks."
+        @keydown.esc.prevent="closeMultiInput"
+      ></textarea>
+      <div class="multi-input-actions">
+        <a href="#" class="multi-input-action" @click.prevent="applyMultiInput">Mark on map</a>
+        <a href="#" class="multi-input-action" @click.prevent="clearMultiInput">Clear</a>
+        <a href="#" class="multi-input-action" @click.prevent="closeMultiInput">Cancel</a>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -59,6 +78,9 @@ export default {
     query: {
       default: ""
     },
+    multiInputResetToken: {
+      default: 0
+    },
     delay: {
       default: 80
     }
@@ -75,15 +97,28 @@ export default {
       currentSelected: -1,
       showSuggestions: false,
       showLoading: false,
+      showMultiInput: false,
       loadingError: null,
       suggestions: [],
       currentQuery: this.query,
+      multiInputText: '',
       currentUser: null,
     };
+  },
+  computed: {
+    searchInputStyle() {
+      const hasClearButton = this.currentQuery || this.showClearButton;
+      return {
+        paddingRight: hasClearButton ? '96px' : '48px'
+      };
+    }
   },
   watch: {
     query(newQuery) {
       this.currentQuery = newQuery;
+    },
+    multiInputResetToken() {
+      this.multiInputText = '';
     }
   },
   methods: {
@@ -104,6 +139,7 @@ export default {
     hideSuggestions() {
       this.showSuggestions = false;
       this.showLoading = false;
+      this.showMultiInput = false;
       this.pendingKeyToShow = true;
     },
 
@@ -132,6 +168,34 @@ export default {
       this.getSuggestionsInternal();
       // this.focus();
       this.$emit("cleared");
+    },
+
+    toggleMultiInput() {
+      const shouldOpen = !this.showMultiInput;
+      this.showSuggestions = false;
+      this.showLoading = false;
+      this.showMultiInput = shouldOpen;
+      if (!shouldOpen) return;
+      this.$nextTick(() => {
+        this.$refs.multiInput?.focus();
+      });
+    },
+
+    closeMultiInput() {
+      this.showMultiInput = false;
+    },
+
+    applyMultiInput() {
+      this.$emit('multiSelected', this.multiInputText);
+      this.closeMultiInput();
+    },
+
+    clearMultiInput() {
+      this.multiInputText = '';
+      this.$emit('multiCleared');
+      this.$nextTick(() => {
+        this.$refs.multiInput?.focus();
+      });
     },
 
     handleInput(event) {
@@ -288,6 +352,31 @@ img.avatar {
   background: var(--color-border-hover);
 }
 
+.multi-input-toggle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: var(--color-text);
+  font-size: 18px;
+  line-height: 1;
+  z-index: 1;
+}
+
+.multi-input-toggle.with-clear {
+  right: 48px;
+}
+
+.multi-input-toggle:hover,
+.multi-input-toggle:focus {
+  background: var(--color-border-hover);
+}
+
 .suggestion {
   display: block;
   width: 100%;
@@ -362,6 +451,52 @@ input::placeholder {
 
 .searching b {
   font-weight: bold;
+}
+
+.multi-input-popover {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  width: 100%;
+  background: var(--color-background-soft);
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  z-index: 2;
+}
+
+.multi-input-title {
+  font-size: 12px;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+
+.multi-input-textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid var(--color-border);
+  background: var(--color-background-mute);
+  color: var(--color-text);
+  padding: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.multi-input-textarea:focus {
+  outline: 1px solid var(--color-link-hover);
+  border-color: var(--color-link-hover);
+}
+
+.multi-input-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+}
+
+.multi-input-action {
+  color: var(--color-link-hover);
 }
 
 @media (max-width: 600px) {

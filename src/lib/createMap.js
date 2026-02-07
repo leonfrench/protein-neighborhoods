@@ -11,6 +11,7 @@ import getColorTheme from "./getColorTheme";
 
 const primaryHighlightColor = "#bf2072";
 const secondaryHighlightColor = "#e56aaa";
+const bulkHighlightColor = "#1f8a70";
 const fallbackPointSize = 5;
 
 const currentColorTheme = getColorTheme();
@@ -28,12 +29,16 @@ export default function createMap() {
   const fastLinesLayer = getCustomLayer();
   let backgroundEdgesFetch;
   let labelEditor;
+  let persistentHighlightedFeatures = [];
+  let transientHighlightedFeatures = [];
   // collection of labels.
 
   map.on("load", () => {
     map.addLayer(fastLinesLayer, "circle-layer");
     // map.addLayer(createRadialGradient(), "polygon-layer");
     labelEditor = createLabelEditor(map);
+    applyPersistentHighlights();
+    applyTransientHighlights();
   });
 
   map.on("contextmenu", (e) => {
@@ -102,6 +107,9 @@ export default function createMap() {
       // TODO: Remove custom layer?
     },
     makeVisible,
+    highlightNodes,
+    clearSelectionHighlights,
+    clearPersistentHighlights,
     clearHighlights,
     getPlacesGeoJSON,
     getGroupIdAt
@@ -141,13 +149,25 @@ export default function createMap() {
     return labelEditor.getPlaces();
   }
 
-  function clearHighlights() {
+  function clearSelectionHighlights() {
+    backgroundEdgesFetch?.cancel();
     fastLinesLayer.clear();
-    map.getSource("selected-nodes").setData({
-      type: "FeatureCollection",
-      features: []
-    });
-    map.redraw();
+    transientHighlightedFeatures = [];
+    applyTransientHighlights();
+  }
+
+  function clearPersistentHighlights() {
+    persistentHighlightedFeatures = [];
+    applyPersistentHighlights();
+  }
+
+  function clearHighlights() {
+    backgroundEdgesFetch?.cancel();
+    fastLinesLayer.clear();
+    persistentHighlightedFeatures = [];
+    transientHighlightedFeatures = [];
+    applyPersistentHighlights();
+    applyTransientHighlights();
   }
 
   function makeVisible(repository, location, disableAnimation = false) {
@@ -164,6 +184,56 @@ export default function createMap() {
 
     map.once("moveend", drawEdgesAtCurrentCenter);
     map.flyTo(location);
+  }
+
+  function highlightNodes(nodes = []) {
+    backgroundEdgesFetch?.cancel();
+    fastLinesLayer.clear();
+    persistentHighlightedFeatures = nodes
+      .map((node) => {
+        const coordinates = Array.isArray(node.coordinates)
+          ? node.coordinates
+          : [node.lat, node.lon];
+        if (!Array.isArray(coordinates) || coordinates.length !== 2) return null;
+        if (!Number.isFinite(coordinates[0]) || !Number.isFinite(coordinates[1])) return null;
+        return {
+          type: "Feature",
+          geometry: { type: "Point", coordinates },
+          properties: {
+            color: node.color || bulkHighlightColor,
+            name: node.text || node.name || "",
+            background: node.background || "#222",
+            highlightKind: node.highlightKind || "bulk",
+            textSize: node.textSize || 0.8,
+            size: node.size || fallbackPointSize * 6
+          }
+        };
+      })
+      .filter(Boolean);
+
+    applyPersistentHighlights();
+  }
+
+  function applyPersistentHighlights() {
+    const source = map.getSource("persistent-selected-nodes");
+    if (!source) return;
+
+    source.setData({
+      type: "FeatureCollection",
+      features: persistentHighlightedFeatures
+    });
+    map.redraw();
+  }
+
+  function applyTransientHighlights() {
+    const source = map.getSource("selected-nodes");
+    if (!source) return;
+
+    source.setData({
+      type: "FeatureCollection",
+      features: transientHighlightedFeatures
+    });
+    map.redraw();
   }
 
   function getBackgroundNearPoint(point) {
@@ -241,7 +311,7 @@ export default function createMap() {
             highlightedNodes.features.push({
               type: "Feature",
               geometry: {type: "Point", coordinates: primaryNodePosition},
-              properties: {color: primaryHighlightColor, name: repo, background: fillColor, textSize: 1.2, size: primaryNodeSize}
+              properties: {color: primaryHighlightColor, name: repo, background: fillColor, highlightKind: "click", textSize: 1.2, size: primaryNodeSize}
             });
           } 
           let otherName = repo === link.fromId ? link.toId : link.fromId;
@@ -250,15 +320,15 @@ export default function createMap() {
           highlightedNodes.features.push({
             type: "Feature",
             geometry: {type: "Point", coordinates: repo === link.fromId ? toGeo : fromGeo},
-            properties: {color: secondaryHighlightColor, name: otherName, background: fillColor, textSize: 0.8, size: otherNodeSize}
+            properties: {color: secondaryHighlightColor, name: otherName, background: fillColor, highlightKind: "click", textSize: 0.8, size: otherNodeSize}
           });
         } else fastLinesLayer.addLine(line);
       });
       firstLevelLinks.forEach(line => {
         fastLinesLayer.addLine(line)
       });
-      map.getSource("selected-nodes").setData(highlightedNodes);
-      map.redraw();
+      transientHighlightedFeatures = highlightedNodes.features;
+      applyTransientHighlights();
     });
     backgroundEdgesFetch.cancel = () => {isCancelled = true};
   }
@@ -318,6 +388,13 @@ function getDefaultStyle() {
           data: {
             type: "FeatureCollection",
             features: [] 
+          }
+        },
+        "persistent-selected-nodes": {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: []
           }
         }
       },
@@ -421,9 +498,20 @@ function getDefaultStyle() {
               "interpolate",
               ["linear"],
               ["zoom"],
-              5,  ["*", ["get", "size"], .1],
-              23, ["*", ["get", "size"], 1.5],
-            ]
+              0, ["max", 3, ["*", ["get", "size"], 0.2]],
+              5, ["max", 4, ["*", ["get", "size"], 0.25]],
+              23, ["*", ["get", "size"], 1.6],
+            ],
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0, 0.5,
+              8, 1.5,
+              15, 2
+            ],
+            "circle-stroke-opacity": 0.9
           }
         },
         {
@@ -442,6 +530,7 @@ function getDefaultStyle() {
               "interpolate",
               ["linear"],
               ["zoom"],
+              0, ["max", 8, ["/", ["get", "size"], 2.5]],
               8, ["/", ["get", "size"], 4],
               10, ["+", ["get", "size"], 8]
             ],
@@ -495,6 +584,62 @@ function getDefaultStyle() {
         ["+", ["zoom"], 4]
       ],
 },
+        {
+          "id": "persistent-selected-nodes-layer",
+          "type": "circle",
+          "source": "persistent-selected-nodes",
+          "paint": {
+            "circle-color": ["get", "color"],
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0, ["max", 3, ["*", ["get", "size"], 0.2]],
+              5, ["max", 4, ["*", ["get", "size"], 0.25]],
+              23, ["*", ["get", "size"], 1.6],
+            ],
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0, 0.5,
+              8, 1.5,
+              15, 2
+            ],
+            "circle-stroke-opacity": 0.9
+          }
+        },
+        {
+          "id": "persistent-selected-nodes-labels-layer",
+          "type": "symbol",
+          "source": "persistent-selected-nodes",
+          "layout": {
+            "text-font": [ "Roboto Condensed Regular" ],
+            "text-field": ["get", "name"],
+            "text-anchor": "top",
+            "text-max-width": 10,
+            "symbol-sort-key": ["-", 0, ["get", "textSize"]],
+            "symbol-spacing": 500,
+            "text-offset": [0, 0.5],
+            "text-allow-overlap": true,
+            "text-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0, ["max", 6, ["/", ["get", "size"], 3]],
+              5, ["max", 7, ["/", ["get", "size"], 2.6]],
+              8, ["max", 9, ["/", ["get", "size"], 2.2]],
+              10, ["max", 12, ["*", ["get", "size"], 0.6]],
+              14, ["*", ["get", "size"], 1.0]
+            ],
+          },
+          "paint": {
+            "text-color": "#fff",
+            "text-halo-color": ["get", "color"],
+            "text-halo-width": 3,
+          },
+        },
       ]
     },
   };

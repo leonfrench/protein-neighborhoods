@@ -49,10 +49,17 @@ onBeforeUnmount(() => {
 </p>
 
 <p>
+  Use the <b>&#9776;</b> button in the search bar to open multi-gene input and mark a batch of genes/proteins at once.
+  You can test for multi-gene patterns in the same 100D space using a separate probe tool:
+  <a href="https://cca-100-embed-tool.streamlit.app/" target="_blank" rel="noopener noreferrer" class="normal">CCA 100D embed probe</a>.
+</p>
+
+<p>
   The source code is on <a href="https://github.com/leonfrench/protein-neighborhoods" class='normal'>Github</a>.
   Inspired by, and originally forked from,
   <a href="https://github.com/anvaka/map-of-github" target="_blank" class="normal">Map of GitHub</a> by @anvaka.
 </p>
+
 
 </div>
 
