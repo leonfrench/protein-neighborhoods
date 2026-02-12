@@ -107,6 +107,7 @@ export default function createMap() {
       // TODO: Remove custom layer?
     },
     makeVisible,
+    focusOnNodes,
     highlightNodes,
     clearSelectionHighlights,
     clearPersistentHighlights,
@@ -186,16 +187,76 @@ export default function createMap() {
     map.flyTo(location);
   }
 
+  function focusOnNodes(
+    nodes = [],
+    { padding = 80, maxZoom = 8, disableAnimation = false } = {}
+  ) {
+    const coordinates = nodes.map(getNodeCoordinates).filter(Boolean);
+    if (!coordinates.length) return;
+
+    let minLng = Infinity;
+    let minLat = Infinity;
+    let maxLng = -Infinity;
+    let maxLat = -Infinity;
+
+    coordinates.forEach(([lng, lat]) => {
+      if (lng < minLng) minLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lng > maxLng) maxLng = lng;
+      if (lat > maxLat) maxLat = lat;
+    });
+
+    if (minLng === maxLng && minLat === maxLat) {
+      const location = {
+        center: [minLng, minLat],
+        zoom: maxZoom
+      };
+      if (disableAnimation) {
+        map.jumpTo(location);
+      } else {
+        map.flyTo(location);
+      }
+      return;
+    }
+
+    const location = map.cameraForBounds(
+      [
+        [minLng, minLat],
+        [maxLng, maxLat]
+      ],
+      {
+        padding,
+        maxZoom
+      }
+    );
+    if (!location) return;
+
+    if (disableAnimation) {
+      map.jumpTo(location);
+    } else {
+      map.flyTo(location);
+    }
+  }
+
+  function getNodeCoordinates(node = {}) {
+    const coordinates = Array.isArray(node.coordinates)
+      ? node.coordinates
+      : [node.lat, node.lon];
+    if (!Array.isArray(coordinates) || coordinates.length !== 2) return null;
+
+    const lng = Number(coordinates[0]);
+    const lat = Number(coordinates[1]);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+    return [lng, lat];
+  }
+
   function highlightNodes(nodes = []) {
     backgroundEdgesFetch?.cancel();
     fastLinesLayer.clear();
     persistentHighlightedFeatures = nodes
       .map((node) => {
-        const coordinates = Array.isArray(node.coordinates)
-          ? node.coordinates
-          : [node.lat, node.lon];
-        if (!Array.isArray(coordinates) || coordinates.length !== 2) return null;
-        if (!Number.isFinite(coordinates[0]) || !Number.isFinite(coordinates[1])) return null;
+        const coordinates = getNodeCoordinates(node);
+        if (!coordinates) return null;
         return {
           type: "Feature",
           geometry: { type: "Point", coordinates },

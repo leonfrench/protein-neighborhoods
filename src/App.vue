@@ -155,6 +155,12 @@ async function onMultiGenesSelected(rawInput) {
 
   hasPersistentMultiHighlights.value = true;
   window.mapOwner?.highlightNodes(matches);
+  if (matches.length > 1) {
+    window.mapOwner?.focusOnNodes?.(matches, {
+      padding: isSmallScreen.value ? 48 : 96,
+      maxZoom: SEARCH_FOCUS_ZOOM
+    });
+  }
 }
 
 function onMultiGenesCleared() {
