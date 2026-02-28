@@ -5,7 +5,7 @@ import bus from '../bus';
 
 export default function createLabelEditor(map) {
   let places;
-  const placeLabelLayers = ['place-country-1'];
+  const placeLabelLayers = ['place-country-1', 'place-country-1-enriched'];
 
   getPlaceLabels().then(loadedPlaces => {
     map.getSource('place').setData(loadedPlaces)
@@ -18,7 +18,10 @@ export default function createLabelEditor(map) {
   }
 
   function getContextMenuItems(e, borderOwnerId) {
-    const labelFeature = map.queryRenderedFeatures(e.point, { layers: placeLabelLayers });
+    const activePlaceLabelLayers = placeLabelLayers.filter((layerId) => map.getLayer(layerId));
+    const labelFeature = activePlaceLabelLayers.length
+      ? map.queryRenderedFeatures(e.point, { layers: activePlaceLabelLayers })
+      : [];
     let items = []
     if (labelFeature.length) {
       const label = labelFeature[0].properties;

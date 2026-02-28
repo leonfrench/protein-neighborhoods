@@ -54,6 +54,7 @@
       ></textarea>
       <div class="multi-input-actions">
         <a href="#" class="multi-input-action" @click.prevent="applyMultiInput">Mark on map</a>
+        <a href="#" class="multi-input-action" @click.prevent="downloadMultiInputEnrichment">Enrichment CSV</a>
         <a href="#" class="multi-input-action" @click.prevent="clearMultiInput">Clear</a>
         <a href="#" class="multi-input-action" @click.prevent="closeMultiInput">Cancel</a>
       </div>
@@ -188,6 +189,10 @@ export default {
     applyMultiInput() {
       this.$emit('multiSelected', this.multiInputText);
       this.closeMultiInput();
+    },
+
+    downloadMultiInputEnrichment() {
+      this.$emit('multiDownloadEnrichment', this.multiInputText);
     },
 
     clearMultiInput() {
@@ -493,6 +498,7 @@ input::placeholder {
   margin-top: 8px;
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .multi-input-action {

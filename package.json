@@ -10,6 +10,7 @@
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore"
   },
   "dependencies": {
+    "@stdlib/stats-base-dists-hypergeometric-cdf": "^0.2.1",
     "dompurify": "^3.0.2",
     "fuzzysort": "^1.2.0",
     "maplibre-gl": "^2.4.0",

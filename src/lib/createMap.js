@@ -11,8 +11,15 @@ import getColorTheme from "./getColorTheme";
 
 const primaryHighlightColor = "#bf2072";
 const secondaryHighlightColor = "#e56aaa";
-const bulkHighlightColor = "#1f8a70";
+const bulkHighlightColor = "#43bfa2";
+const enrichedRegionColor = "#ffbe0b";
+const enrichedRegionLabelColor = "#ffffff";
+const enrichedRegionLabelHaloColor = "#186d59";
+const enrichedRegionLabelSizeScale = 1.7;
 const fallbackPointSize = 5;
+const placeCountryLayerId = "place-country-1";
+const enrichedPlaceCountryLayerId = "place-country-1-enriched";
+const restoreBeforeLayerId = "persistent-selected-nodes-layer";
 
 const currentColorTheme = getColorTheme();
 
@@ -31,6 +38,9 @@ export default function createMap() {
   let labelEditor;
   let persistentHighlightedFeatures = [];
   let transientHighlightedFeatures = [];
+  let enrichedRegionFeatures = [];
+  let enrichedLabelOwnerIds = [];
+  let enrichedRegionRequestId = 0;
   // collection of labels.
 
   map.on("load", () => {
@@ -39,6 +49,8 @@ export default function createMap() {
     labelEditor = createLabelEditor(map);
     applyPersistentHighlights();
     applyTransientHighlights();
+    applyEnrichedRegionHighlights();
+    applyEnrichedRegionLabelStyles();
   });
 
   map.on("contextmenu", (e) => {
@@ -72,7 +84,7 @@ export default function createMap() {
     bus.fire("show-context-menu", contextMenuItems);
   });
 
-  map.on("mousemove", (e) => {
+  map.on("mousemove", () => {
     // let hoveredFeature = findNearestCity(e.point);
     // if (hoveredFeature) {
     //   const bgFeature = getBackgroundNearPoint(e.point);
@@ -99,6 +111,21 @@ export default function createMap() {
     drawBackgroundEdges(e.point, repo, !includeExternal);
   });
   const bordersCollection = fetch(config.bordersSource).then((res) => res.json());
+  const bordersIndex = bordersCollection.then((collection) => {
+    const features = Array.isArray(collection?.features) ? collection.features : [];
+    return features
+      .map((feature) => {
+        const ring = feature?.geometry?.coordinates?.[0];
+        if (!Array.isArray(ring) || !ring.length) return null;
+        const bbox = getRingBounds(ring);
+        return {
+          id: feature.id,
+          ring,
+          bbox
+        };
+      })
+      .filter(Boolean);
+  });
 
   return {
     map,
@@ -109,28 +136,49 @@ export default function createMap() {
     makeVisible,
     focusOnNodes,
     highlightNodes,
+    highlightRegions,
     clearSelectionHighlights,
     clearPersistentHighlights,
+    clearRegionHighlights,
     clearHighlights,
     getPlacesGeoJSON,
-    getGroupIdAt
+    getGroupIdAt,
+    getGroupIdsAtCoordinates
   }
 
-  function getGroupIdAt(lat, lon) {
-    // find first group that contains the point.
-    return bordersCollection.then((collection) => {
-      const feature = collection.features.find((f) => {
-        return polygonContainsPoint(f.geometry.coordinates[0], lat, lon);
-      });
-      if (!feature) return;
-      const id = feature.id;
-      return id;
-    });
+  function getGroupIdAt(lng, lat) {
+    const pointLng = Number(lng);
+    const pointLat = Number(lat);
+    if (!Number.isFinite(pointLng) || !Number.isFinite(pointLat)) {
+      return Promise.resolve(undefined);
+    }
+    return bordersIndex.then((index) => findGroupIdForPoint(index, pointLng, pointLat));
+  }
 
-    // const res = map.querySourceFeatures('borders-source').find((f) => {
-    //   return polygonContainsPoint(f.geometry.coordinates[0], lat, lon);
-    // });
-    // return res?.id;
+  function getGroupIdsAtCoordinates(coordinates = []) {
+    if (!Array.isArray(coordinates) || !coordinates.length) {
+      return Promise.resolve([]);
+    }
+    return bordersIndex.then((index) => {
+      return coordinates.map((pair) => {
+        if (!Array.isArray(pair) || pair.length !== 2) return undefined;
+        const lng = Number(pair[0]);
+        const lat = Number(pair[1]);
+        if (!Number.isFinite(lng) || !Number.isFinite(lat)) return undefined;
+        return findGroupIdForPoint(index, lng, lat);
+      });
+    });
+  }
+
+  function findGroupIdForPoint(index = [], lng, lat) {
+    for (let i = 0; i < index.length; i += 1) {
+      const border = index[i];
+      if (!isPointInsideBounds(lng, lat, border.bbox)) continue;
+      if (polygonContainsPoint(border.ring, lng, lat)) {
+        return border.id;
+      }
+    }
+    return undefined;
   }
 
   function showDetails(nearestCity) {
@@ -162,13 +210,26 @@ export default function createMap() {
     applyPersistentHighlights();
   }
 
+  function clearRegionHighlights() {
+    enrichedRegionRequestId += 1;
+    enrichedRegionFeatures = [];
+    enrichedLabelOwnerIds = [];
+    applyEnrichedRegionHighlights();
+    applyEnrichedRegionLabelStyles();
+  }
+
   function clearHighlights() {
     backgroundEdgesFetch?.cancel();
     fastLinesLayer.clear();
     persistentHighlightedFeatures = [];
     transientHighlightedFeatures = [];
+    enrichedRegionFeatures = [];
+    enrichedLabelOwnerIds = [];
+    enrichedRegionRequestId += 1;
     applyPersistentHighlights();
     applyTransientHighlights();
+    applyEnrichedRegionHighlights();
+    applyEnrichedRegionLabelStyles();
   }
 
   function makeVisible(repository, location, disableAnimation = false) {
@@ -295,6 +356,142 @@ export default function createMap() {
       features: transientHighlightedFeatures
     });
     map.redraw();
+  }
+
+  function applyEnrichedRegionHighlights() {
+    const source = map.getSource("enriched-regions");
+    if (!source) return;
+
+    source.setData({
+      type: "FeatureCollection",
+      features: enrichedRegionFeatures
+    });
+    map.redraw();
+  }
+
+  function highlightRegions(groupIds = []) {
+    const uniqueGroupIds = new Set(
+      (Array.isArray(groupIds) ? groupIds : [])
+        .filter((id) => id !== undefined && id !== null)
+        .map((id) => String(id))
+    );
+    const requestId = ++enrichedRegionRequestId;
+
+    if (!uniqueGroupIds.size) {
+      enrichedRegionFeatures = [];
+      enrichedLabelOwnerIds = [];
+      applyEnrichedRegionHighlights();
+      applyEnrichedRegionLabelStyles();
+      return;
+    }
+    enrichedLabelOwnerIds = Array.from(uniqueGroupIds);
+    applyEnrichedRegionLabelStyles();
+
+    bordersCollection
+      .then((collection) => {
+        if (requestId !== enrichedRegionRequestId) return;
+        const features = Array.isArray(collection?.features) ? collection.features : [];
+        enrichedRegionFeatures = features.filter((feature) =>
+          uniqueGroupIds.has(String(feature?.id))
+        );
+        applyEnrichedRegionHighlights();
+      })
+      .catch((error) => {
+        if (requestId !== enrichedRegionRequestId) return;
+        console.error(error);
+        enrichedRegionFeatures = [];
+        enrichedLabelOwnerIds = [];
+        applyEnrichedRegionHighlights();
+        applyEnrichedRegionLabelStyles();
+      });
+  }
+
+  function applyEnrichedRegionLabelStyles() {
+    if (!map.getLayer(placeCountryLayerId)) return;
+
+    const baseSizeExpression = getPlaceCountryLabelBaseTextSizeExpression();
+    const baseFilterExpression = getPlaceCountryLabelBaseFilterExpression();
+    const hasEnrichedLabels = enrichedLabelOwnerIds.length > 0;
+    const isEnrichedExpression = getEnrichedOwnerIdConditionExpression(enrichedLabelOwnerIds);
+    const baseFilterForDefaultLayer = hasEnrichedLabels
+      ? ["all", baseFilterExpression, ["!", isEnrichedExpression]]
+      : baseFilterExpression;
+
+    if (map.getLayer(restoreBeforeLayerId)) {
+      map.moveLayer(placeCountryLayerId, restoreBeforeLayerId);
+    }
+    map.setLayerZoomRange(placeCountryLayerId, 0, 10);
+    map.setFilter(placeCountryLayerId, baseFilterForDefaultLayer);
+    map.setLayoutProperty(placeCountryLayerId, "text-size", baseSizeExpression);
+    map.setLayoutProperty(placeCountryLayerId, "text-allow-overlap", false);
+    map.setLayoutProperty(placeCountryLayerId, "text-ignore-placement", false);
+    map.setPaintProperty(placeCountryLayerId, "text-color", currentColorTheme.placeLabelsColor);
+    map.setPaintProperty(placeCountryLayerId, "text-halo-color", currentColorTheme.placeLabelsHaloColor);
+    map.setPaintProperty(placeCountryLayerId, "text-halo-width", currentColorTheme.placeLabelsHaloWidth);
+
+    if (!hasEnrichedLabels) {
+      removeEnrichedPlaceCountryLayer();
+      return;
+    }
+
+    ensureEnrichedPlaceCountryLayer();
+    if (!map.getLayer(enrichedPlaceCountryLayerId)) return;
+
+    map.setLayerZoomRange(enrichedPlaceCountryLayerId, 0, 24);
+    map.setFilter(enrichedPlaceCountryLayerId, isEnrichedExpression);
+    map.setLayoutProperty(
+      enrichedPlaceCountryLayerId,
+      "text-size",
+      getPlaceCountryLabelBaseTextSizeExpression(enrichedRegionLabelSizeScale)
+    );
+    map.setLayoutProperty(enrichedPlaceCountryLayerId, "text-allow-overlap", true);
+    map.setLayoutProperty(enrichedPlaceCountryLayerId, "text-ignore-placement", true);
+    map.setPaintProperty(enrichedPlaceCountryLayerId, "text-color", enrichedRegionLabelColor);
+    map.setPaintProperty(enrichedPlaceCountryLayerId, "text-halo-color", enrichedRegionLabelHaloColor);
+    map.setPaintProperty(
+      enrichedPlaceCountryLayerId,
+      "text-halo-width",
+      getEnrichedPlaceLabelHaloWidth()
+    );
+    map.moveLayer(enrichedPlaceCountryLayerId);
+  }
+
+  function ensureEnrichedPlaceCountryLayer() {
+    if (map.getLayer(enrichedPlaceCountryLayerId)) return;
+
+    const layerDefinition = {
+      id: enrichedPlaceCountryLayerId,
+      type: "symbol",
+      source: "place",
+      layout: {
+        "text-font": [ "Roboto Condensed Regular" ],
+        "text-size": getPlaceCountryLabelBaseTextSizeExpression(),
+        "symbol-sort-key": ["get", "symbolzoom"],
+        "text-field": "{name}",
+        "text-max-width": 6,
+        "text-line-height": 1.1,
+        "text-letter-spacing": 0,
+        "text-allow-overlap": true,
+        "text-ignore-placement": true
+      },
+      paint: {
+        "text-color": enrichedRegionLabelColor,
+        "text-halo-color": enrichedRegionLabelHaloColor,
+        "text-halo-width": getEnrichedPlaceLabelHaloWidth()
+      }
+    };
+
+    if (map.getLayer(restoreBeforeLayerId)) {
+      map.addLayer(layerDefinition, restoreBeforeLayerId);
+      return;
+    }
+
+    map.addLayer(layerDefinition);
+  }
+
+  function removeEnrichedPlaceCountryLayer() {
+    if (!map.getLayer(enrichedPlaceCountryLayerId)) return;
+    map.removeLayer(enrichedPlaceCountryLayerId);
   }
 
   function getBackgroundNearPoint(point) {
@@ -457,6 +654,13 @@ function getDefaultStyle() {
             type: "FeatureCollection",
             features: []
           }
+        },
+        "enriched-regions": {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: []
+          }
         }
       },
       layers: [
@@ -474,6 +678,23 @@ function getDefaultStyle() {
           "filter": ["==", "$type", "Polygon"],
           "paint": {
             "fill-color": colorStyle
+          }
+        },
+        {
+          "id": "enriched-regions-line-underlay",
+          "type": "line",
+          "source": "enriched-regions",
+          "paint": {
+            "line-color": enrichedRegionColor,
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              3, 1.0,
+              8, 1.6,
+              14, 3.0
+            ],
+            "line-opacity": 0.7
           }
         },
         {
@@ -611,23 +832,7 @@ function getDefaultStyle() {
     "source": "place",
     "layout": {
         "text-font": [ "Roboto Condensed Bold" ],
-        "text-size": [
-          "interpolate",
-          [ "cubic-bezier", 0.2, 0, 0.7, 1 ],
-          ["zoom"],
-          1, [
-            "step",
-            ["get", "symbolzoom"], 15, 
-            4, 13, 
-            5, 12
-          ],
-          9, [
-            "step",
-            ["get", "symbolzoom"], 22,
-            4, 19,
-            5, 17
-          ]
-        ],
+        "text-size": getPlaceCountryLabelBaseTextSizeExpression(),
         "symbol-sort-key": ["get", "symbolzoom"],
         "text-field": "{name}",
         "text-max-width": 6,
@@ -639,11 +844,7 @@ function getDefaultStyle() {
       "text-halo-color": currentColorTheme.placeLabelsHaloColor,
       "text-halo-width": currentColorTheme.placeLabelsHaloWidth,
     },
-    "filter": [
-        "<=",
-        ["get", "symbolzoom"],
-        ["+", ["zoom"], 4]
-      ],
+    "filter": getPlaceCountryLabelBaseFilterExpression(),
 },
         {
           "id": "persistent-selected-nodes-layer",
@@ -701,6 +902,28 @@ function getDefaultStyle() {
             "text-halo-width": 3,
           },
         },
+        {
+          "id": "enriched-regions-top-line",
+          "type": "line",
+          "source": "enriched-regions",
+          "layout": {
+            "line-join": "round",
+            "line-cap": "round"
+          },
+          "paint": {
+            "line-color": "#fff7cf",
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              2, 1.4,
+              6, 2.6,
+              10, 4.0,
+              14, 5.8
+            ],
+            "line-opacity": 0.95
+          }
+        }
       ]
     },
   };
@@ -714,11 +937,102 @@ function getPolygonFillColor(polygonProperties) {
   }
   return polygonProperties.fill;
 }
+
+function getRingBounds(ring = []) {
+  let minLng = Infinity;
+  let minLat = Infinity;
+  let maxLng = -Infinity;
+  let maxLat = -Infinity;
+
+  ring.forEach((point) => {
+    if (!Array.isArray(point) || point.length < 2) return;
+    const lng = Number(point[0]);
+    const lat = Number(point[1]);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
+    if (lng < minLng) minLng = lng;
+    if (lat < minLat) minLat = lat;
+    if (lng > maxLng) maxLng = lng;
+    if (lat > maxLat) maxLat = lat;
+  });
+
+  return [minLng, minLat, maxLng, maxLat];
+}
+
+function isPointInsideBounds(lng, lat, bounds = []) {
+  if (!Array.isArray(bounds) || bounds.length !== 4) return false;
+  return lng >= bounds[0] && lng <= bounds[2] && lat >= bounds[1] && lat <= bounds[3];
+}
+
+function getEnrichedOwnerIdConditionExpression(ownerIds = []) {
+  return [
+    "in",
+    ["to-string", ["get", "ownerId"]],
+    ["literal", ownerIds]
+  ];
+}
+
+function getPlaceCountryLabelBaseTextSizeExpression(scale = 1) {
+  const textScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  return [
+    "interpolate",
+    [ "cubic-bezier", 0.2, 0, 0.7, 1 ],
+    ["zoom"],
+    1, [
+      "*",
+      textScale,
+      [
+        "step",
+        ["get", "symbolzoom"], 15,
+        4, 13,
+        5, 12
+      ]
+    ],
+    9, [
+      "*",
+      textScale,
+      [
+        "step",
+        ["get", "symbolzoom"], 22,
+        4, 19,
+        5, 17
+      ]
+    ]
+  ];
+}
+
+function getPlaceCountryLabelBaseFilterExpression() {
+  return [
+    "<=",
+    ["get", "symbolzoom"],
+    ["+", ["zoom"], 4]
+  ];
+}
+
+function getEnrichedPlaceLabelHaloWidth() {
+  return Math.max(1.3, currentColorTheme.placeLabelsHaloWidth + 0.35);
+}
+
+function pointOnSegment(px, py, x1, y1, x2, y2, epsilon = 1e-9) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const cross = (px - x1) * dy - (py - y1) * dx;
+  if (Math.abs(cross) > epsilon) return false;
+
+  const minX = Math.min(x1, x2) - epsilon;
+  const maxX = Math.max(x1, x2) + epsilon;
+  const minY = Math.min(y1, y2) - epsilon;
+  const maxY = Math.max(y1, y2) + epsilon;
+  return px >= minX && px <= maxX && py >= minY && py <= maxY;
+}
+
 function polygonContainsPoint(ring, pX, pY) {
     let c = false;
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
         const p1 = ring[i];
         const p2 = ring[j];
+        if (pointOnSegment(pX, pY, p1[0], p1[1], p2[0], p2[1])) {
+            return true;
+        }
         if (((p1[1] > pY) !== (p2[1] > pY)) && (pX < (p2[0] - p1[0]) * (pY - p1[1]) / (p2[1] - p1[1]) + p1[0])) {
             c = !c;
         }

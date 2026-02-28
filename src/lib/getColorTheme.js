@@ -20,7 +20,7 @@ const explorer = {
 
   placeLabelsColor: "#FFF",
   placeLabelsHaloColor: "#000",
-  placeLabelsHaloWidth: 0.2,
+  placeLabelsHaloWidth: 0.03,
   color: [
     {input: '#516ebc', output: '#013185'}, // '#AAD8E6'},
     {input: '#00529c', output: '#1373A9'}, // '#2B7499'},
