@@ -19,7 +19,7 @@ const enrichedRegionLabelSizeScale = 1.7;
 const fallbackPointSize = 5;
 const placeCountryLayerId = "place-country-1";
 const enrichedPlaceCountryLayerId = "place-country-1-enriched";
-const restoreBeforeLayerId = "persistent-selected-nodes-layer";
+const restoreBeforeLayerId = "session-highlighted-nodes-layer";
 
 const currentColorTheme = getColorTheme();
 
@@ -37,6 +37,7 @@ export default function createMap() {
   let backgroundEdgesFetch;
   let labelEditor;
   let persistentHighlightedFeatures = [];
+  let sessionHighlightedFeatures = [];
   let transientHighlightedFeatures = [];
   let enrichedRegionFeatures = [];
   let enrichedLabelOwnerIds = [];
@@ -48,6 +49,7 @@ export default function createMap() {
     // map.addLayer(createRadialGradient(), "polygon-layer");
     labelEditor = createLabelEditor(map);
     applyPersistentHighlights();
+    applySessionHighlights();
     applyTransientHighlights();
     applyEnrichedRegionHighlights();
     applyEnrichedRegionLabelStyles();
@@ -136,9 +138,11 @@ export default function createMap() {
     makeVisible,
     focusOnNodes,
     highlightNodes,
+    setSessionHighlights,
     highlightRegions,
     clearSelectionHighlights,
     clearPersistentHighlights,
+    clearSessionHighlights,
     clearRegionHighlights,
     clearHighlights,
     getPlacesGeoJSON,
@@ -210,6 +214,11 @@ export default function createMap() {
     applyPersistentHighlights();
   }
 
+  function clearSessionHighlights() {
+    sessionHighlightedFeatures = [];
+    applySessionHighlights();
+  }
+
   function clearRegionHighlights() {
     enrichedRegionRequestId += 1;
     enrichedRegionFeatures = [];
@@ -222,11 +231,13 @@ export default function createMap() {
     backgroundEdgesFetch?.cancel();
     fastLinesLayer.clear();
     persistentHighlightedFeatures = [];
+    sessionHighlightedFeatures = [];
     transientHighlightedFeatures = [];
     enrichedRegionFeatures = [];
     enrichedLabelOwnerIds = [];
     enrichedRegionRequestId += 1;
     applyPersistentHighlights();
+    applySessionHighlights();
     applyTransientHighlights();
     applyEnrichedRegionHighlights();
     applyEnrichedRegionLabelStyles();
@@ -343,6 +354,38 @@ export default function createMap() {
     source.setData({
       type: "FeatureCollection",
       features: persistentHighlightedFeatures
+    });
+    map.redraw();
+  }
+
+  function setSessionHighlights(nodes = []) {
+    sessionHighlightedFeatures = nodes
+      .map((node) => {
+        const coordinates = getNodeCoordinates(node);
+        if (!coordinates) return null;
+        return {
+          type: "Feature",
+          geometry: { type: "Point", coordinates },
+          properties: {
+            color: node.color || primaryHighlightColor,
+            name: node.text || node.name || "",
+            textSize: node.textSize || 0.8,
+            size: node.size || fallbackPointSize * 6
+          }
+        };
+      })
+      .filter(Boolean);
+
+    applySessionHighlights();
+  }
+
+  function applySessionHighlights() {
+    const source = map.getSource("session-highlighted-nodes");
+    if (!source) return;
+
+    source.setData({
+      type: "FeatureCollection",
+      features: sessionHighlightedFeatures
     });
     map.redraw();
   }
@@ -655,6 +698,13 @@ function getDefaultStyle() {
             features: []
           }
         },
+        "session-highlighted-nodes": {
+          type: "geojson",
+          data: {
+            type: "FeatureCollection",
+            features: []
+          }
+        },
         "enriched-regions": {
           type: "geojson",
           data: {
@@ -795,6 +845,62 @@ function getDefaultStyle() {
             ],
             "circle-stroke-opacity": 0.9
           }
+        },
+        {
+          "id": "session-highlighted-nodes-layer",
+          "type": "circle",
+          "source": "session-highlighted-nodes",
+          "paint": {
+            "circle-color": ["get", "color"],
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0, ["max", 3, ["*", ["get", "size"], 0.2]],
+              5, ["max", 4, ["*", ["get", "size"], 0.25]],
+              23, ["*", ["get", "size"], 1.6],
+            ],
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0, 0.5,
+              8, 1.5,
+              15, 2
+            ],
+            "circle-stroke-opacity": 0.95
+          }
+        },
+        {
+          "id": "session-highlighted-nodes-labels-layer",
+          "type": "symbol",
+          "source": "session-highlighted-nodes",
+          "layout": {
+            "text-font": [ "Roboto Condensed Regular" ],
+            "text-field": ["get", "name"],
+            "text-anchor": "top",
+            "text-max-width": 10,
+            "symbol-sort-key": ["-", 0, ["get", "textSize"]],
+            "symbol-spacing": 500,
+            "text-offset": [0, 0.5],
+            "text-allow-overlap": true,
+            "text-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0, ["max", 6, ["/", ["get", "size"], 3]],
+              5, ["max", 7, ["/", ["get", "size"], 2.6]],
+              8, ["max", 9, ["/", ["get", "size"], 2.2]],
+              10, ["max", 12, ["*", ["get", "size"], 0.6]],
+              14, ["*", ["get", "size"], 1.0]
+            ],
+          },
+          "paint": {
+            "text-color": "#fff",
+            "text-halo-color": ["get", "color"],
+            "text-halo-width": 3,
+          },
         },
         {
           "id": "selected-nodes-labels-layer",

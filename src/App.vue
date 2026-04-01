@@ -38,18 +38,26 @@ const multiInputResetToken = ref(0);
 let clusterInfoRequestId = 0;
 const SEARCH_FOCUS_ZOOM = 8;
 const BULK_HIGHLIGHT_SIZE = 30;
+const SESSION_HIGHLIGHT_LIMIT = 40;
 const MULTI_GENE_SPLITTER = /[,\s;]+/;
 const ENRICHMENT_FDR_THRESHOLD = 0.05;
 const ENRICHMENT_UNIVERSE_BUCKETS = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
 const namesIndexCache = new Map();
 let enrichmentRequestId = 0;
 let universeRegionStatsPromise = null;
+const sessionProteinHighlights = ref([]);
 
 function onTypeAheadInput() {
 }
 
 function onSubmit() {
 }
+
+const currentProteinHighlightColor = computed(() => {
+  const currentName = currentProject.value;
+  if (!currentName) return '';
+  return getSessionProteinHighlight(currentName)?.color || '';
+});
 
 function normalizeGeneName(name = '') {
   return name.trim().toLowerCase();
@@ -126,6 +134,64 @@ function getMapNodeCoordinates(node = {}) {
   const lat = Number(coordinates[1]);
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
   return [lng, lat];
+}
+
+function getSessionProteinHighlight(name = '') {
+  return sessionProteinHighlights.value.find((item) => item.text === name) || null;
+}
+
+function syncSessionProteinHighlights() {
+  window.mapOwner?.setSessionHighlights?.(sessionProteinHighlights.value);
+}
+
+function getCurrentProteinHighlightNode() {
+  const currentName = currentProject.value || lastSelected?.text;
+  if (!currentName) return null;
+
+  const existingHighlight = getSessionProteinHighlight(currentName);
+  if (existingHighlight) {
+    return existingHighlight;
+  }
+
+  if (lastSelected?.text !== currentName) return null;
+  if (lastSelected?.lat === undefined || lastSelected?.lon === undefined) return null;
+
+  return {
+    text: currentName,
+    coordinates: [lastSelected.lat, lastSelected.lon],
+    size: BULK_HIGHLIGHT_SIZE
+  };
+}
+
+function setCurrentProteinHighlight(color) {
+  if (!color) return;
+
+  const currentNode = getCurrentProteinHighlightNode();
+  if (!currentNode) return;
+
+  const nextHighlights = sessionProteinHighlights.value
+    .filter((item) => item.text !== currentNode.text)
+    .concat({
+      ...currentNode,
+      color
+    });
+
+  while (nextHighlights.length > SESSION_HIGHLIGHT_LIMIT) {
+    nextHighlights.shift();
+  }
+
+  sessionProteinHighlights.value = nextHighlights;
+  syncSessionProteinHighlights();
+}
+
+function clearCurrentProteinHighlight() {
+  const currentName = currentProject.value || lastSelected?.text;
+  if (!currentName) return;
+
+  sessionProteinHighlights.value = sessionProteinHighlights.value.filter(
+    (item) => item.text !== currentName
+  );
+  syncSessionProteinHighlights();
 }
 
 async function getGroupIdsForNodes(nodes = []) {
@@ -776,7 +842,10 @@ async function listCurrentConnections() {
       :cluster-id="currentClusterId"
       :cluster-name="currentClusterName"
       :cluster-enriched-go="currentClusterEnrichedGo"
+      :highlight-color="currentProteinHighlightColor"
       @listConnections="listCurrentConnections()"
+      @setHighlightColor="setCurrentProteinHighlight"
+      @clearHighlight="clearCurrentProteinHighlight"
     ></gene-repository>
     <form @submit.prevent="onSubmit" class="search-box" v-if="typeAheadVisible">
       <type-ahead

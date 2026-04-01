@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
   name: {
@@ -29,10 +29,16 @@ const props = defineProps({
   error: {
     type: String,
     default: ''
+  },
+  highlightColor: {
+    type: String,
+    default: ''
   }
 });
 
-const emit = defineEmits(['listConnections']);
+const emit = defineEmits(['listConnections', 'setHighlightColor', 'clearHighlight']);
+const colorInput = ref(null);
+const defaultHighlightColor = ref('#8f4f2a');
 
 const geneEntry = computed(() => {
   if (!props.metadata) return null;
@@ -69,8 +75,82 @@ const displayClusterEnrichedGo = computed(() => {
   return props.clusterEnrichedGo || 'Unknown';
 });
 
+const highlightButtonColor = computed(() => {
+  return props.highlightColor || defaultHighlightColor.value;
+});
+
+const highlightButtonLabel = computed(() => {
+  return props.highlightColor ? 'Change highlight color' : 'Highlight protein';
+});
+
 function listConnections() {
   emit('listConnections');
+}
+
+function openColorPicker() {
+  setHighlightColor(highlightButtonColor.value);
+  colorInput.value?.click();
+}
+
+function setHighlightColor(color) {
+  emit('setHighlightColor', color);
+}
+
+function clearHighlight() {
+  emit('clearHighlight');
+}
+
+watch(
+  () => props.name,
+  () => {
+    defaultHighlightColor.value = generateRandomHighlightColor();
+  },
+  { immediate: true }
+);
+
+function generateRandomHighlightColor() {
+  const hue = Math.floor(Math.random() * 360);
+  const saturation = 50 + Math.floor(Math.random() * 26);
+  const lightness = 28 + Math.floor(Math.random() * 15);
+  return hslToHex(hue, saturation, lightness);
+}
+
+function hslToHex(hue, saturation, lightness) {
+  const normalizedSaturation = saturation / 100;
+  const normalizedLightness = lightness / 100;
+  const chroma = (1 - Math.abs(2 * normalizedLightness - 1)) * normalizedSaturation;
+  const hueSection = hue / 60;
+  const secondComponent = chroma * (1 - Math.abs((hueSection % 2) - 1));
+  const matchLightness = normalizedLightness - chroma / 2;
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+
+  if (hueSection >= 0 && hueSection < 1) {
+    red = chroma;
+    green = secondComponent;
+  } else if (hueSection < 2) {
+    red = secondComponent;
+    green = chroma;
+  } else if (hueSection < 3) {
+    green = chroma;
+    blue = secondComponent;
+  } else if (hueSection < 4) {
+    green = secondComponent;
+    blue = chroma;
+  } else if (hueSection < 5) {
+    red = secondComponent;
+    blue = chroma;
+  } else {
+    red = chroma;
+    blue = secondComponent;
+  }
+
+  return `#${toHex(red + matchLightness)}${toHex(green + matchLightness)}${toHex(blue + matchLightness)}`;
+}
+
+function toHex(channel) {
+  return Math.round(channel * 255).toString(16).padStart(2, '0');
 }
 </script>
 
@@ -88,6 +168,22 @@ function listConnections() {
         <div class="cluster-enriched-go">Enriched GO: {{ displayClusterEnrichedGo }}</div>
         <div class="actions row">
           <a href="#" class="action-link" @click.prevent="listConnections()">List connections</a>
+        </div>
+        <div class="actions row">
+          <button type="button" class="action-link action-button" @click="openColorPicker()">
+            <span>{{ highlightButtonLabel }}</span>
+            <span class="highlight-swatch" :style="{ backgroundColor: highlightButtonColor }"></span>
+          </button>
+          <input
+            ref="colorInput"
+            class="color-picker-input"
+            type="color"
+            :value="highlightButtonColor"
+            @input="setHighlightColor($event.target.value)"
+          >
+        </div>
+        <div v-if="highlightColor" class="actions row secondary-actions">
+          <a href="#" class="secondary-action-link" @click.prevent="clearHighlight()">Remove highlight</a>
         </div>
       </div>
       <div v-if="loading" class="loading">
@@ -162,8 +258,40 @@ h2 {
   transition: all 0.3s ease;
 }
 
+.action-button {
+  cursor: pointer;
+  font: inherit;
+  gap: 10px;
+}
+
 .action-link:hover {
   border-color: var(--color-border-hover);
+  color: var(--color-link-hover);
+}
+
+.color-picker-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.highlight-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.secondary-actions {
+  margin-top: 4px;
+  padding-top: 0;
+}
+
+.secondary-action-link {
   color: var(--color-link-hover);
 }
 
